@@ -78,7 +78,7 @@ public class PersistentRedBlackTree<Key extends Comparable<Key>, Value> {
 
   // BST helper node data type
   private class Node {
-    private static final int MAX_RECORD_CHANGES = 5;
+    private static final int MAX_RECORD_CHANGES = 10;
 
     public Key key;
     private TreeMap<Comparable, SetRecord> setRecords;
@@ -176,10 +176,10 @@ public class PersistentRedBlackTree<Key extends Comparable<Key>, Value> {
     public SetRecord findRevision (Comparable revision) {
       if (setRecords.isEmpty()) return null;
 
-      Map.Entry<Comparable, SetRecord> ceiling =
-        setRecords.ceilingEntry(revision);
+      Map.Entry<Comparable, SetRecord> floor =
+        setRecords.floorEntry(revision);
 
-      return ceiling == null ? null : ceiling.getValue();
+      return floor == null ? null : floor.getValue();
     }
 
     public Node setValue(Comparable revision, Value val) {
@@ -277,7 +277,7 @@ public class PersistentRedBlackTree<Key extends Comparable<Key>, Value> {
       //
       // we can't do this for the root though because there is no parent
       if (setRecords.size() >= MAX_RECORD_CHANGES && this.parent != null) {
-        System.out.println("Allocating a new node!");
+        System.out.println("Allocating a new node");
         Node replacement =
           new Node(this.key, setRecords.lastEntry().getValue());
 
@@ -426,30 +426,23 @@ public class PersistentRedBlackTree<Key extends Comparable<Key>, Value> {
     int cmp = key.compareTo(subtree.key);
 
     if        (cmp < 0) {
-      System.out.println("setting left");
       subtree = subtree.setLeft( revision, put(subtree.getLeft(revision),  key, val, revision));
     } else if (cmp > 0) {
-      System.out.println("setting right of " + subtree.toString(revision));
       subtree = subtree.setRight(revision, put(subtree.getRight(revision), key, val, revision));
     } else {
-      System.out.println("setting value");
       subtree = subtree.setValue(revision, val);
     }
 
     // fix-up any right-leaning links
     // if right is red and left is black, rotate left
     if (isRed(subtree.getRight(revision), revision) && !isRed(subtree.getLeft(revision), revision)) {
-      System.out.println("rotating left of " + subtree.toString(revision));
       subtree = rotateLeft(subtree, revision);
       // if left is red and left of left is red, rotate right
     } if (isRed(subtree.getLeft(revision), revision) && isRed(subtree.getLeft(revision).getLeft(revision), revision)) {
-      System.out.println("rotating right of " + subtree.toString(revision));
       subtree = rotateRight(subtree, revision);
       // if left is red and right is red, flip colors
     } if (isRed(subtree.getLeft(revision), revision) && isRed(subtree.getRight(revision), revision)) {
-      System.out.println("flipping colors of " + subtree.toString(revision));
       subtree = flipColors(subtree, revision);
-      System.out.println("flipped. " + subtree.toString(revision));
     }
 
     return subtree;
@@ -534,8 +527,9 @@ public class PersistentRedBlackTree<Key extends Comparable<Key>, Value> {
     if (key == null) throw new IllegalArgumentException("argument to delete() is null");
     if (!contains(key, revision)) return;
 
-    // if both children of root are black, set root to red
     Node root = findRoot(revision);
+
+    // if both children of root are black, set root to red
     if (!isRed(root.getLeft(revision), revision) && !isRed(root.getRight(revision), revision))
       root.setColor(revision, Color.RED);
 
@@ -549,8 +543,7 @@ public class PersistentRedBlackTree<Key extends Comparable<Key>, Value> {
       if (!isRed(h.getLeft(revision), revision) && !isRed(h.getLeft(revision).getLeft(revision), revision))
         h = moveRedLeft(h, revision);
       h = h.setLeft(revision, delete(h.getLeft(revision), key, revision));
-    }
-    else {
+    } else {
       if (isRed(h.getLeft(revision), revision))
         h = rotateRight(h, revision);
       if (key.compareTo(h.key) == 0 && (h.getRight(revision) == null))
@@ -580,8 +573,6 @@ public class PersistentRedBlackTree<Key extends Comparable<Key>, Value> {
     left = left.setColor(revision, left.getRight(revision).getColor(revision));
     left.getRight(revision).setColor(revision, Color.RED);
 
-    System.out.println("rotated. " + left.toString(revision));
-
     // note that `left` is now the root of the subtree because of the rotation
     return left;
   }
@@ -593,8 +584,6 @@ public class PersistentRedBlackTree<Key extends Comparable<Key>, Value> {
     right = right.setLeft(revision, subtree);
     right = right.setColor(revision, right.getLeft(revision).getColor(revision));
     right.getLeft(revision).setColor(revision, Color.RED);
-
-    System.out.println("rotated. " + right.toString(revision));
 
     // note that `right` is now the root of the subtree because of the rotation
     return right;
@@ -616,11 +605,11 @@ public class PersistentRedBlackTree<Key extends Comparable<Key>, Value> {
   // Assuming that h is red and both h.getLeft(revision) and h.getLeft(revision).getLeft(revision)
   // are black, make h.getLeft(revision) or one of its children red.
   private Node moveRedLeft(Node h, Comparable revision) {
-    flipColors(h, revision);
+    h = flipColors(h, revision);
     if (isRed(h.getRight(revision).getLeft(revision), revision)) {
       h = h.setRight(revision, rotateRight(h.getRight(revision), revision));
       h = rotateLeft(h, revision);
-      flipColors(h, revision);
+      h = flipColors(h, revision);
     }
     return h;
   }
@@ -628,10 +617,10 @@ public class PersistentRedBlackTree<Key extends Comparable<Key>, Value> {
   // Assuming that h is red and both h.getRight(revision) and h.getRight(revision).getLeft(revision)
   // are black, make h.getRight(revision) or one of its children red.
   private Node moveRedRight(Node h, Comparable revision) {
-    flipColors(h, revision);
+    h = flipColors(h, revision);
     if (isRed(h.getLeft(revision).getLeft(revision), revision)) {
       h = rotateRight(h, revision);
-      flipColors(h, revision);
+      h = flipColors(h, revision);
     }
     return h;
   }
@@ -643,7 +632,7 @@ public class PersistentRedBlackTree<Key extends Comparable<Key>, Value> {
     if (isRed(h.getLeft(revision), revision) && isRed(h.getLeft(revision).getLeft(revision), revision))
       h = rotateRight(h, revision);
     if (isRed(h.getLeft(revision), revision) && isRed(h.getRight(revision), revision))
-      flipColors(h, revision);
+      h = flipColors(h, revision);
 
     return h;
   }
@@ -693,7 +682,7 @@ public class PersistentRedBlackTree<Key extends Comparable<Key>, Value> {
   private Node findRoot(Comparable revision) {
     if (rootRecords.isEmpty()) return null;
 
-    Map.Entry<Comparable, Node> entry = rootRecords.ceilingEntry(revision);
+    Map.Entry<Comparable, Node> entry = rootRecords.floorEntry(revision);
 
     if (entry == null) return null;
 
@@ -701,6 +690,7 @@ public class PersistentRedBlackTree<Key extends Comparable<Key>, Value> {
   }
 
   private void setRoot (Comparable revision, Node node) {
+    System.out.println("Setting root to " + node.toString(revision));
     // will replace the existing entry at `revision`
     rootRecords.put(revision, node);
   }
@@ -708,7 +698,6 @@ public class PersistentRedBlackTree<Key extends Comparable<Key>, Value> {
   public String toString () {
     String str = "";
 
-    // TODO use StringBuilder to interpose newlines
     for (Comparable revision : rootRecords.keySet())
       str += "revision " + revision + ": " + toString(revision) + "\n";
 
@@ -716,18 +705,20 @@ public class PersistentRedBlackTree<Key extends Comparable<Key>, Value> {
   }
 
   public String toString (Comparable revision) {
-    return findRoot(revision).toString(revision);
+    Node root = findRoot(revision);
+
+    return root == null ?
+      "No tree exists at revision " + revision :
+      root.toString(revision);
   }
 
   public static void main(String[] args) {
     PersistentRedBlackTree<Float, String> tree = new PersistentRedBlackTree<Float, String>();
 
-    Float key = 1.0f;
-
     // doing classic Red/Black stuff
 
     System.out.println("inserting a:1.0 at revision 1.0");
-    tree.put(key, "a", 1.0);
+    tree.put(1.0f, "a", 1.0);
     System.out.println(tree.toString(1.0));
 
     System.out.println("\ninserting y:0.8 at revision 1.0");
@@ -756,23 +747,43 @@ public class PersistentRedBlackTree<Key extends Comparable<Key>, Value> {
 
     // Holding multiple revisions
 
-    /*
-    System.out.println("\ninserting b at revision 1.1");
-    tree.put(key, "b", 1.1);
-    System.out.println("inserting c at revision 1.2");
-    tree.put(key, "c", 1.2);
-    System.out.println("inserting d at revision 1.3");
-    tree.put(key, "d", 1.3);
-    System.out.println("inserting e at revision 1.4");
-    tree.put(key, "e", 1.4);
-    System.out.println(tree.toString());
+    System.out.println("\ninserting b:1.0 at revision 1.1");
+    tree.put(1.0f, "b", 1.1);
+    System.out.println("inserting c:1.2 at revision 1.2");
+    tree.put(1.2f, "c", 1.2);
+    System.out.println("inserting d:1.6 at revision 1.3");
+    tree.put(1.6f, "d", 1.3);
+    System.out.println("inserting e:0.6 at revision 1.4");
+    tree.put(0.6f, "e", 1.4);
+    System.out.println(tree);
 
     // getting from revisions
 
-    System.out.print("getting the key at revision 1.0: ");
-    System.out.println(tree.get(key, 1.0));
-    System.out.print("getting the key at revision 1.1: ");
-    System.out.println(tree.get(key, 1.1));
-    */
+    System.out.print("getting 1.0 at revision 1.0: ");
+    System.out.println(tree.get(1.0f, 1.0));
+    System.out.print("getting 1.0 at revision 1.1: ");
+    System.out.println(tree.get(1.0f, 1.1));
+
+    // getting an invalid revision. revisions are gotten as the floor entry.
+    // if no floor entry exists, the tree will throw a NoSuchElementException
+
+    System.out.println("\ngetting revision 0.9");
+    System.out.println(tree.toString(0.9));
+
+    // removing elements
+
+    System.out.println("\nDeleting key 1.1 in revision 1.5");
+    tree.delete(1.1f, 1.5);
+    System.out.println(tree);
+
+    System.out.println(tree.rootRecords);
+
+    // removing the root
+
+    System.out.println("Deleting key 1.0 in revision 1.6");
+    tree.delete(1.0f, 1.6);
+    System.out.println(tree);
+
+    System.out.println(tree.rootRecords);
   }
 }
