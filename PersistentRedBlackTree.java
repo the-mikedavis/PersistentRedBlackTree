@@ -765,6 +765,7 @@ public class PersistentRedBlackTree<Key extends Comparable<Key>, Value> {
 
     // getting an invalid revision. revisions are gotten as the floor entry.
     // if no floor entry exists, the tree will throw a NoSuchElementException
+    // when calling get/2
 
     System.out.println("\ngetting revision 0.9");
     System.out.println(tree.toString(0.9));
