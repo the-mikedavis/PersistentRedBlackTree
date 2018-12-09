@@ -690,7 +690,6 @@ public class PersistentRedBlackTree<Key extends Comparable<Key>, Value> {
   }
 
   private void setRoot (Comparable revision, Node node) {
-    System.out.println("Setting root to " + node.toString(revision));
     // will replace the existing entry at `revision`
     rootRecords.put(revision, node);
   }
