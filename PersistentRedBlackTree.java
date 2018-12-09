@@ -78,7 +78,7 @@ public class PersistentRedBlackTree<Key extends Comparable<Key>, Value> {
 
   // BST helper node data type
   private class Node {
-    private static final int MAX_RECORD_CHANGES = 10;
+    private static final int MAX_RECORD_CHANGES = 5;
 
     public Key key;
     private TreeMap<Comparable, SetRecord> setRecords;
@@ -274,10 +274,8 @@ public class PersistentRedBlackTree<Key extends Comparable<Key>, Value> {
 
     private Node whichNode(Comparable revision) {
       // if we've maxed out this node, allocate a new one and tell its parent
-      //
       // we can't do this for the root though because there is no parent
       if (setRecords.size() >= MAX_RECORD_CHANGES && this.parent != null) {
-        System.out.println("Allocating a new node");
         Node replacement =
           new Node(this.key, setRecords.lastEntry().getValue());
 
@@ -466,7 +464,7 @@ public class PersistentRedBlackTree<Key extends Comparable<Key>, Value> {
       root.setColor(revision, Color.RED);
 
     setRoot(revision, deleteMin(root, revision));
-    if (!isEmpty(revision)) root.setColor(revision, Color.BLACK);
+    if (!isEmpty(revision)) findRoot(revision).setColor(revision, Color.BLACK);
   }
 
   // delete the key-value pair with the minimum key rooted at h
@@ -496,7 +494,7 @@ public class PersistentRedBlackTree<Key extends Comparable<Key>, Value> {
       root.setColor(revision, Color.RED);
 
     setRoot(revision, deleteMax(root, revision));
-    if (!isEmpty(revision)) root.setColor(revision, Color.BLACK);
+    if (!isEmpty(revision)) findRoot(revision).setColor(revision, Color.BLACK);
   }
 
   // delete the key-value pair with the maximum key rooted at h
@@ -534,7 +532,7 @@ public class PersistentRedBlackTree<Key extends Comparable<Key>, Value> {
       root.setColor(revision, Color.RED);
 
     setRoot(revision, delete(root, key, revision));
-    if (!isEmpty(revision)) root.setColor(revision, Color.BLACK);
+    if (!isEmpty(revision)) findRoot(revision).setColor(revision, Color.BLACK);
   }
 
   // delete the key-value pair with the given key rooted at h
@@ -550,13 +548,21 @@ public class PersistentRedBlackTree<Key extends Comparable<Key>, Value> {
         return null;
       if (!isRed(h.getRight(revision), revision) && !isRed(h.getRight(revision).getLeft(revision), revision))
         h = moveRedRight(h, revision);
+
+      // you've found the node you're looking for
       if (key.compareTo(h.key) == 0) {
-        Node x = min(h.getRight(revision), revision);
-        h.key = x.key;
-        h = h.setValue(revision, x.getValue(revision));
-        h = h.setRight(revision, deleteMin(h.getRight(revision), revision));
-      }
-      else h = h.setRight(revision, delete(h.getRight(revision), key, revision));
+        Node rightMin = min(h.getRight(revision), revision);
+
+        rightMin.parent = null;
+        rightMin.direction = null;
+
+        // can't alter .key
+        //h.key = rightMin.key;
+        //h = h.setValue(revision, rightMin.getValue(revision));
+        rightMin = rightMin.setRight(revision, deleteMin(h.getRight(revision), revision));
+        h = rightMin.setLeft(revision, h.getLeft(revision));
+      } else
+        h = h.setRight(revision, delete(h.getRight(revision), key, revision));
     }
     return balance(h, revision);
   }
@@ -652,10 +658,7 @@ public class PersistentRedBlackTree<Key extends Comparable<Key>, Value> {
 
   // the smallest key in subtree rooted at x; null if no such key
   private Node min(Node x, Comparable revision) {
-    if (x.getLeft(revision) == null)
-      return x;
-    else
-      return min(x.getLeft(revision), revision);
+    return x.getLeft(revision) == null ? x : min(x.getLeft(revision), revision);
   }
 
   /**
@@ -673,10 +676,7 @@ public class PersistentRedBlackTree<Key extends Comparable<Key>, Value> {
 
   // the largest key in the subtree rooted at x; null if no such key
   private Node max(Node x, Comparable revision) {
-    if (x.getRight(revision) == null)
-      return x;
-    else
-      return max(x.getRight(revision), revision);
+    return x.getRight(revision) == null ?  x : max(x.getRight(revision), revision);
   }
 
   private Node findRoot(Comparable revision) {
@@ -708,8 +708,7 @@ public class PersistentRedBlackTree<Key extends Comparable<Key>, Value> {
     Node root = findRoot(revision);
 
     return root == null ?
-      "No tree exists at revision " + revision :
-      root.toString(revision);
+      "No tree exists at revision " + revision : root.toString(revision);
   }
 
   public static void main(String[] args) {
@@ -776,14 +775,10 @@ public class PersistentRedBlackTree<Key extends Comparable<Key>, Value> {
     tree.delete(1.1f, 1.5);
     System.out.println(tree);
 
-    System.out.println(tree.rootRecords);
-
     // removing the root
 
     System.out.println("Deleting key 1.0 in revision 1.6");
     tree.delete(1.0f, 1.6);
     System.out.println(tree);
-
-    System.out.println(tree.rootRecords);
   }
 }
