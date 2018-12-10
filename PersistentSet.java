@@ -226,20 +226,54 @@ public class PersistentSet<E extends Comparable<E>, R extends Comparable<R>> {
    *  Standard BST search.
    ***************************************************************************/
 
-  // TODO modify this for getting
   /**
-   * Returns the value associated with the given element.
-   * @param key the key
-   * @param revision the revision for which to find the key
-   * @return the value associated with the given key if the key is in the symbol table
-   *     and {@code null} if the key is not in the symbol table
+   * Returns the greatest element smaller than {@code element}.
+   *
+   * @param element the element to search for
+   * @param revision the revision for which to find the element
+   * @return the greatest element smaller than {@code element}
+   *     and {@code null} if there is none.
    * @throws IllegalArgumentException if {@code key} is {@code null}
    */
-  public E get(E element, R revision) {
+  public E predecessor(E element, R revision) {
     if (element == null) throw new IllegalArgumentException("argument to get() is null");
 
     Node root = findRoot(revision);
-    return get(root, element, revision);
+    return predecessor(root, null, element, revision);
+  }
+
+  private E predecessor(Node x, E accumulator, E element, R revision) {
+    if (x == null) return accumulator;
+    int cmp = element.compareTo(x.element);
+    if (cmp < 0)
+      return predecessor(x.getLeft(revision), accumulator, element, revision);
+    else
+      return predecessor(x.getRight(revision), x.element, element, revision);
+  }
+
+  /**
+   * Returns the smallest element greater than {@code element}.
+   *
+   * @param element the element to search for
+   * @param revision the revision for which to find the element
+   * @return the smallest element greater than {@code element}
+   *     and {@code null} if there is none.
+   * @throws IllegalArgumentException if {@code key} is {@code null}
+   */
+  public E successor(E element, R revision) {
+    if (element == null) throw new IllegalArgumentException("argument to get() is null");
+
+    Node root = findRoot(revision);
+    return successor(root, null, element, revision);
+  }
+
+  private E successor(Node x, E accumulator, E element, R revision) {
+    if (x == null) return accumulator;
+    int cmp = element.compareTo(x.element);
+    if (cmp < 0)
+      return successor(x.getLeft(revision), x.element, element, revision);
+    else
+      return successor(x.getRight(revision), accumulator, element, revision);
   }
 
   private E get(Node x, E element, R revision) {
@@ -592,5 +626,17 @@ public class PersistentSet<E extends Comparable<E>, R extends Comparable<R>> {
     System.out.println("Deleting key 1.0 in revision 1.6");
     tree.remove(1.0f, 1.6);
     System.out.println(tree);
+
+    // getting elements by proximity
+
+    System.out.println("Predecessor of 1.05 in revision 1.0: " +
+        tree.predecessor(1.05f, 1.0));
+    System.out.println("Predecessor of 0.85 in revision 1.0: " +
+        tree.predecessor(0.85f, 1.0));
+
+    System.out.println("Successor of 1.05 in revision 1.0: " +
+        tree.successor(1.05f, 1.0));
+    System.out.println("Successor of 0.85 in revision 1.0: " +
+        tree.successor(0.85f, 1.0));
   }
 }
