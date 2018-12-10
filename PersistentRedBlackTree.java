@@ -22,14 +22,11 @@ public class PersistentRedBlackTree<Key extends Comparable<Key>, Value> {
 
   private enum Color { RED, BLACK }
 
-  private enum Direction { LEFT, RIGHT }
-
   // saves the 'state' of a node at a revision
   private class SetRecord {
     public Comparable revision;
     public Node left, right, node;
     public Value val;
-    public Color color;
     public int size;
 
     public SetRecord (
@@ -37,14 +34,12 @@ public class PersistentRedBlackTree<Key extends Comparable<Key>, Value> {
         Node left,
         Node right,
         Value val,
-        Color color,
         int size     ) {
 
       this.revision = revision;
       this.left = left;
       this.right = right;
       this.val = val;
-      this.color = color;
       this.size = size;
     }
 
@@ -53,16 +48,14 @@ public class PersistentRedBlackTree<Key extends Comparable<Key>, Value> {
       this.left = previous.left;
       this.right = previous.right;
       this.val = val;
-      this.color = previous.color;
       this.size = previous.size;
     }
 
-    public SetRecord (Comparable revision, SetRecord previous, Color color) {
+    public SetRecord (Comparable revision, SetRecord previous) {
       this.revision = revision;
       this.left = previous.left;
       this.right = previous.right;
       this.val = previous.val;
-      this.color = color;
       this.size = previous.size;
     }
 
@@ -71,7 +64,6 @@ public class PersistentRedBlackTree<Key extends Comparable<Key>, Value> {
         "left: " + (left == null ? "()" : left.toString(revision)) + ", " +
         "right: " + (right == null ? "()" : right.toString(revision)) + ", " +
         "value: " + val + ", " +
-        "color: " + (color == Color.RED ? "red" : "black") + ", " +
         "size: " + size;
     }
   }
@@ -81,12 +73,8 @@ public class PersistentRedBlackTree<Key extends Comparable<Key>, Value> {
     private static final int MAX_RECORD_CHANGES = 5;
 
     public Key key;
+    public Color color;
     private TreeMap<Comparable, SetRecord> setRecords;
-
-    // bookkeeping so we know (when provisioning a new node) whether we're our
-    // parent's left or right child.
-    public Direction direction;
-    public Node parent;
 
     public Node (Key key) {
       this.key = key;
@@ -102,7 +90,9 @@ public class PersistentRedBlackTree<Key extends Comparable<Key>, Value> {
 
       this(key);
 
-      setRecords.put(revision, new SetRecord(revision, null, null, val, color, size));
+      this.color = color;
+
+      setRecords.put(revision, new SetRecord(revision, null, null, val, size));
     }
 
     public Node (Key key, SetRecord record) {
@@ -119,7 +109,7 @@ public class PersistentRedBlackTree<Key extends Comparable<Key>, Value> {
       if (node == null) return "()";
 
       return "({" + node.key + ":" + node.getValue(revision) + ":" +
-        (node.getColor(revision) == Color.RED ? "red" : "black") + "} " +
+        (node.color == Color.RED ? "red" : "black") + "} " +
         toString(revision, node.getLeft(revision)) + " " +
         toString(revision, node.getRight(revision)) + ")";
     }
@@ -151,15 +141,6 @@ public class PersistentRedBlackTree<Key extends Comparable<Key>, Value> {
       return current.right;
     }
 
-    public Color getColor (Comparable revision) {
-      SetRecord current = findRevision(revision);
-
-      if (current == null)
-        throw new NoSuchElementException("Could not find that revision!");
-
-      return current.color;
-    }
-
     public int getSize (Comparable revision) {
       SetRecord current = findRevision(revision);
 
@@ -185,15 +166,11 @@ public class PersistentRedBlackTree<Key extends Comparable<Key>, Value> {
     public Node setValue(Comparable revision, Value val) {
       Node node = whichNode(revision);
 
-      if (setRecords.isEmpty()) {
-        node.setRecords.put(revision, new SetRecord(revision, null, null, val, Color.RED, 0));
-      } else {
-        SetRecord current = node.setRecords.lastEntry().getValue();
+      SetRecord current = node.setRecords.lastEntry().getValue();
 
-        SetRecord change = new SetRecord(revision, current, val);
+      SetRecord change = new SetRecord(revision, current, val);
 
-        node.setRecords.put(revision, change);
-      }
+      node.setRecords.put(revision, change);
 
       return node;
     }
@@ -201,28 +178,18 @@ public class PersistentRedBlackTree<Key extends Comparable<Key>, Value> {
     public Node setLeft(Comparable revision, Node left) {
       Node node = whichNode(revision);
 
-      if (left != null) {
-        left.parent = node;
-        left.direction = Direction.LEFT;
-      }
+      SetRecord current = node.setRecords.lastEntry().getValue();
 
-      if (setRecords.isEmpty()) {
-        node.setRecords.put(revision, new SetRecord(revision, left, null, null, Color.RED, 0));
-      } else {
-        SetRecord current = node.setRecords.lastEntry().getValue();
+      SetRecord change =
+        new SetRecord(
+          revision,
+          left,
+          current.right,
+          current.val,
+          size(left, current.right, revision)
+        );
 
-        SetRecord change =
-          new SetRecord(
-            revision,
-            left,
-            current.right,
-            current.val,
-            current.color,
-            size(left, current.right, revision)
-          );
-
-        setRecords.put(revision, change);
-      }
+      node.setRecords.put(revision, change);
 
       return node;
     }
@@ -230,59 +197,29 @@ public class PersistentRedBlackTree<Key extends Comparable<Key>, Value> {
     public Node setRight(Comparable revision, Node right) {
       Node node = whichNode(revision);
 
-      if (right != null) {
-        right.parent = node;
-        right.direction = Direction.RIGHT;
-      }
+      SetRecord current = node.setRecords.lastEntry().getValue();
 
-      if (setRecords.isEmpty()) {
-        node.setRecords.put(revision, new SetRecord(revision, null, right, null, Color.RED, 0));
-      } else {
-        SetRecord current = node.setRecords.lastEntry().getValue();
+      SetRecord change =
+        new SetRecord(
+          revision,
+          current.left,
+          right,
+          current.val,
+          size(current.left, right, revision)
+        );
 
-        SetRecord change =
-          new SetRecord(
-            revision,
-            current.left,
-            right,
-            current.val,
-            current.color,
-            size(current.left, right, revision)
-          );
-
-        node.setRecords.put(revision, change);
-      }
-
-      return node;
-    }
-
-    private Node setColor(Comparable revision, Color color) {
-      Node node = whichNode(revision);
-
-      if (setRecords.isEmpty()) {
-        node.setRecords.put(revision, new SetRecord(revision, null, null, null, color, 0));
-      } else {
-        SetRecord current = node.setRecords.lastEntry().getValue();
-
-        SetRecord change = new SetRecord(revision, current, color);
-
-        node.setRecords.put(revision, change);
-      }
+      node.setRecords.put(revision, change);
 
       return node;
     }
 
     private Node whichNode(Comparable revision) {
-      // if we've maxed out this node, allocate a new one and tell its parent
-      // we can't do this for the root though because there is no parent
-      if (setRecords.size() >= MAX_RECORD_CHANGES && this.parent != null) {
+      // if we've maxed out this node, allocate a new one
+      if (setRecords.size() >= MAX_RECORD_CHANGES) {
         Node replacement =
           new Node(this.key, setRecords.lastEntry().getValue());
 
-        if (this.direction == Direction.LEFT)
-          this.parent.setLeft(revision, replacement);
-        else
-          this.parent.setRight(revision, replacement);
+        replacement.color = this.color;
 
         return replacement;
       }
@@ -310,9 +247,9 @@ public class PersistentRedBlackTree<Key extends Comparable<Key>, Value> {
    *  Node helper methods.
    ***************************************************************************/
 
-  private boolean isRed(Node x, Comparable revision) {
+  private boolean isRed(Node x) {
     if (x == null) return false;
-    return x.getColor(revision) == Color.RED;
+    return x.color == Color.RED;
   }
 
   // number of node in subtree rooted at x; 0 if x is null
@@ -413,7 +350,7 @@ public class PersistentRedBlackTree<Key extends Comparable<Key>, Value> {
       setRoot(revision, new Node(revision, key, val, Color.BLACK, 1));
     } else {
       setRoot(revision, put(root, key, val, revision));
-      root.setColor(revision, Color.BLACK);
+      root.color = Color.BLACK;
     }
   }
 
@@ -433,14 +370,14 @@ public class PersistentRedBlackTree<Key extends Comparable<Key>, Value> {
 
     // fix-up any right-leaning links
     // if right is red and left is black, rotate left
-    if (isRed(subtree.getRight(revision), revision) && !isRed(subtree.getLeft(revision), revision)) {
+    if (isRed(subtree.getRight(revision)) && !isRed(subtree.getLeft(revision))) {
       subtree = rotateLeft(subtree, revision);
       // if left is red and left of left is red, rotate right
-    } if (isRed(subtree.getLeft(revision), revision) && isRed(subtree.getLeft(revision).getLeft(revision), revision)) {
+    } if (isRed(subtree.getLeft(revision)) && isRed(subtree.getLeft(revision).getLeft(revision))) {
       subtree = rotateRight(subtree, revision);
       // if left is red and right is red, flip colors
-    } if (isRed(subtree.getLeft(revision), revision) && isRed(subtree.getRight(revision), revision)) {
-      subtree = flipColors(subtree, revision);
+    } if (isRed(subtree.getLeft(revision)) && isRed(subtree.getRight(revision))) {
+      flipColors(subtree, revision);
     }
 
     return subtree;
@@ -460,11 +397,11 @@ public class PersistentRedBlackTree<Key extends Comparable<Key>, Value> {
 
     // if both children of root are black, set root to red
     Node root = findRoot(revision);
-    if (!isRed(root.getLeft(revision), revision) && !isRed(root.getRight(revision), revision))
-      root.setColor(revision, Color.RED);
+    if (!isRed(root.getLeft(revision)) && !isRed(root.getRight(revision)))
+      root.color = Color.RED;
 
     setRoot(revision, deleteMin(root, revision));
-    if (!isEmpty(revision)) findRoot(revision).setColor(revision, Color.BLACK);
+    if (!isEmpty(revision)) findRoot(revision).color = Color.BLACK;
   }
 
   // delete the key-value pair with the minimum key rooted at h
@@ -472,7 +409,7 @@ public class PersistentRedBlackTree<Key extends Comparable<Key>, Value> {
     if (h.getLeft(revision) == null)
       return null;
 
-    if (!isRed(h.getLeft(revision), revision) && !isRed(h.getLeft(revision).getLeft(revision), revision))
+    if (!isRed(h.getLeft(revision)) && !isRed(h.getLeft(revision).getLeft(revision)))
       h = moveRedLeft(h, revision);
 
     h = h.setLeft(revision, deleteMin(h.getLeft(revision), revision));
@@ -490,22 +427,22 @@ public class PersistentRedBlackTree<Key extends Comparable<Key>, Value> {
 
     // if both children of root are black, set root to red
     Node root = findRoot(revision);
-    if (!isRed(root.getLeft(revision), revision) && !isRed(root.getRight(revision), revision))
-      root.setColor(revision, Color.RED);
+    if (!isRed(root.getLeft(revision)) && !isRed(root.getRight(revision)))
+      root.color = Color.RED;
 
     setRoot(revision, deleteMax(root, revision));
-    if (!isEmpty(revision)) findRoot(revision).setColor(revision, Color.BLACK);
+    if (!isEmpty(revision)) findRoot(revision).color = Color.BLACK;
   }
 
   // delete the key-value pair with the maximum key rooted at h
   private Node deleteMax(Node h, Comparable revision) {
-    if (isRed(h.getLeft(revision), revision))
+    if (isRed(h.getLeft(revision)))
       h = rotateRight(h, revision);
 
     if (h.getRight(revision) == null)
       return null;
 
-    if (!isRed(h.getRight(revision), revision) && !isRed(h.getRight(revision).getLeft(revision), revision))
+    if (!isRed(h.getRight(revision)) && !isRed(h.getRight(revision).getLeft(revision)))
       h = moveRedRight(h, revision);
 
     h = h.setRight(revision, deleteMax(h.getRight(revision), revision));
@@ -528,41 +465,46 @@ public class PersistentRedBlackTree<Key extends Comparable<Key>, Value> {
     Node root = findRoot(revision);
 
     // if both children of root are black, set root to red
-    if (!isRed(root.getLeft(revision), revision) && !isRed(root.getRight(revision), revision))
-      root.setColor(revision, Color.RED);
+    if (!isRed(root.getLeft(revision)) && !isRed(root.getRight(revision)))
+      root.color = Color.RED;
 
     setRoot(revision, delete(root, key, revision));
-    if (!isEmpty(revision)) findRoot(revision).setColor(revision, Color.BLACK);
+    if (!isEmpty(revision)) findRoot(revision).color = Color.BLACK;
   }
 
   // delete the key-value pair with the given key rooted at h
   private Node delete(Node h, Key key, Comparable revision) {
     if (key.compareTo(h.key) < 0)  {
-      if (!isRed(h.getLeft(revision), revision) && !isRed(h.getLeft(revision).getLeft(revision), revision))
+
+      if (!isRed(h.getLeft(revision)) && !isRed(h.getLeft(revision).getLeft(revision)))
         h = moveRedLeft(h, revision);
+
       h = h.setLeft(revision, delete(h.getLeft(revision), key, revision));
+
     } else {
-      if (isRed(h.getLeft(revision), revision))
+
+      if (isRed(h.getLeft(revision)))
         h = rotateRight(h, revision);
+
       if (key.compareTo(h.key) == 0 && (h.getRight(revision) == null))
         return null;
-      if (!isRed(h.getRight(revision), revision) && !isRed(h.getRight(revision).getLeft(revision), revision))
+
+      if (!isRed(h.getRight(revision)) && !isRed(h.getRight(revision).getLeft(revision)))
         h = moveRedRight(h, revision);
 
       // you've found the node you're looking for
       if (key.compareTo(h.key) == 0) {
-        Node rightMin = min(h.getRight(revision), revision);
+        // right min is the new root
+        Node rightMin = min(h.getRight(revision), revision),
+             rightSubtree = deleteMin(h.getRight(revision), revision),
+             leftSubtree = h.getLeft(revision);
 
-        rightMin.parent = null;
-        rightMin.direction = null;
-
-        // can't alter .key
-        //h.key = rightMin.key;
-        //h = h.setValue(revision, rightMin.getValue(revision));
-        rightMin = rightMin.setRight(revision, deleteMin(h.getRight(revision), revision));
-        h = rightMin.setLeft(revision, h.getLeft(revision));
-      } else
+        h = rightMin
+              .setRight(revision, rightSubtree)
+              .setLeft (revision, leftSubtree);
+      } else {
         h = h.setRight(revision, delete(h.getRight(revision), key, revision));
+      }
     }
     return balance(h, revision);
   }
@@ -574,10 +516,11 @@ public class PersistentRedBlackTree<Key extends Comparable<Key>, Value> {
   // make a left-leaning link lean to the right
   private Node rotateRight(Node h, Comparable revision) {
     Node left = h.getLeft(revision);
+
     h = h.setLeft(revision, left.getRight(revision));
     left = left.setRight(revision, h);
-    left = left.setColor(revision, left.getRight(revision).getColor(revision));
-    left.getRight(revision).setColor(revision, Color.RED);
+    left.color = left.getRight(revision).color;
+    left.getRight(revision).color = Color.RED;
 
     // note that `left` is now the root of the subtree because of the rotation
     return left;
@@ -588,19 +531,21 @@ public class PersistentRedBlackTree<Key extends Comparable<Key>, Value> {
     Node right = subtree.getRight(revision);
     subtree = subtree.setRight(revision, right.getLeft(revision));
     right = right.setLeft(revision, subtree);
-    right = right.setColor(revision, right.getLeft(revision).getColor(revision));
-    right.getLeft(revision).setColor(revision, Color.RED);
+    right.color = right.getLeft(revision).color;
+    right.getLeft(revision).color = Color.RED;
 
     // note that `right` is now the root of the subtree because of the rotation
     return right;
   }
 
   // flip the colors of a node and its two children
-  private Node flipColors(Node h, Comparable revision) {
-    h = h.setColor(revision, flipColor(h.getColor(revision)));
-    h.getLeft(revision).setColor(revision, flipColor(h.getLeft(revision).getColor(revision)));
-    h.getRight(revision).setColor(revision, flipColor(h.getRight(revision).getColor(revision)));
-    return h;
+  //
+  // can be void because we don't need to add any set records, so we don't risk
+  // allocating a new node
+  private void flipColors(Node h, Comparable revision) {
+    h.color = flipColor(h.color);
+    h.getLeft(revision).color = flipColor(h.getLeft(revision).color);
+    h.getRight(revision).color = flipColor(h.getRight(revision).color);
   }
 
   // find the opposite of the current color
@@ -611,34 +556,40 @@ public class PersistentRedBlackTree<Key extends Comparable<Key>, Value> {
   // Assuming that h is red and both h.getLeft(revision) and h.getLeft(revision).getLeft(revision)
   // are black, make h.getLeft(revision) or one of its children red.
   private Node moveRedLeft(Node h, Comparable revision) {
-    h = flipColors(h, revision);
-    if (isRed(h.getRight(revision).getLeft(revision), revision)) {
+    flipColors(h, revision);
+
+    if (isRed(h.getRight(revision).getLeft(revision))) {
       h = h.setRight(revision, rotateRight(h.getRight(revision), revision));
       h = rotateLeft(h, revision);
-      h = flipColors(h, revision);
+      flipColors(h, revision);
     }
+
     return h;
   }
 
   // Assuming that h is red and both h.getRight(revision) and h.getRight(revision).getLeft(revision)
   // are black, make h.getRight(revision) or one of its children red.
   private Node moveRedRight(Node h, Comparable revision) {
-    h = flipColors(h, revision);
-    if (isRed(h.getLeft(revision).getLeft(revision), revision)) {
+    flipColors(h, revision);
+
+    if (isRed(h.getLeft(revision).getLeft(revision))) {
       h = rotateRight(h, revision);
-      h = flipColors(h, revision);
+      flipColors(h, revision);
     }
+
     return h;
   }
 
   // restore red-black tree invariant
   private Node balance(Node h, Comparable revision) {
-    if (isRed(h.getRight(revision), revision))
+    if (isRed(h.getRight(revision)))
       h = rotateLeft(h, revision);
-    if (isRed(h.getLeft(revision), revision) && isRed(h.getLeft(revision).getLeft(revision), revision))
+
+    if (isRed(h.getLeft(revision)) && isRed(h.getLeft(revision).getLeft(revision)))
       h = rotateRight(h, revision);
-    if (isRed(h.getLeft(revision), revision) && isRed(h.getRight(revision), revision))
-      h = flipColors(h, revision);
+
+    if (isRed(h.getLeft(revision)) && isRed(h.getRight(revision)))
+      flipColors(h, revision);
 
     return h;
   }
@@ -759,6 +710,8 @@ public class PersistentRedBlackTree<Key extends Comparable<Key>, Value> {
 
     System.out.print("getting 1.0 at revision 1.0: ");
     System.out.println(tree.get(1.0f, 1.0));
+    System.out.print("getting 1.05 at revision 1.1: ");
+    System.out.println(tree.get(1.0f, 1.05));
     System.out.print("getting 1.0 at revision 1.1: ");
     System.out.println(tree.get(1.0f, 1.1));
 
