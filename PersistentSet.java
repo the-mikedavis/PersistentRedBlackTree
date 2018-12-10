@@ -288,6 +288,9 @@ public class PersistentSet<E extends Comparable<E>, R extends Comparable<R>> {
       setRoot(revision, add(root, element, revision));
       root.color = Color.BLACK;
     }
+
+    // TODO
+    return true;
   }
 
   private Node add(Node subtree, E element, R revision) {
