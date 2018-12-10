@@ -280,67 +280,53 @@ public class PersistentSet<E extends Comparable<E>, R extends Comparable<R>> {
   public boolean add(E element, R revision) {
     if (element == null) throw new IllegalArgumentException("argument to add() is null");
 
+    if (contains(element, revision)) return false;
+
     Node root = findRoot(revision);
 
     if (root == null) {
       setRoot(revision, new Node(revision, element, Color.BLACK, 1));
     } else {
       setRoot(revision, add(root, element, revision));
+
+      root = findRoot(revision);
+
       root.color = Color.BLACK;
     }
 
-    // TODO
     return true;
   }
 
-  private Node add(Node subtree, E element, R revision) {
-    if (subtree == null) return new Node(revision, element, Color.RED, 1);
+  private Node add(Node h, E element, R revision) {
+    if (h == null) return new Node(revision, element, Color.RED, 1);
 
-    int cmp = element.compareTo(subtree.element);
+    int cmp = element.compareTo(h.element);
 
-    if        (cmp < 0) {
-      subtree =
-        subtree.setLeft( revision, add(subtree.getLeft(revision),  element, revision));
-    } else if (cmp > 0) {
-      subtree =
-        subtree.setRight(revision, add(subtree.getRight(revision), element, revision));
-    } else {
-      // TODO
-      // if the element was already here, you can't insert it
-      subtree.element = element;
-    }
+    if (cmp < 0)
+      h = h.setLeft( revision, add(h.getLeft(revision),  element, revision));
+    else
+      h = h.setRight(revision, add(h.getRight(revision), element, revision));
 
     // fix-up any right-leaning links
     // if right is red and left is black, rotate left
-    if (isRed(subtree.getRight(revision)) && !isRed(subtree.getLeft(revision))) {
-      subtree = rotateLeft(subtree, revision);
+    if (isRed(h.getRight(revision)) && !isRed(h.getLeft(revision))) {
+      h = rotateLeft(h, revision);
       // if left is red and left of left is red, rotate right
-    } if (isRed(subtree.getLeft(revision)) && isRed(subtree.getLeft(revision).getLeft(revision))) {
-      subtree = rotateRight(subtree, revision);
+    } if (isRed(h.getLeft(revision)) && isRed(h.getLeft(revision).getLeft(revision))) {
+      h = rotateRight(h, revision);
       // if left is red and right is red, flip colors
-    } if (isRed(subtree.getLeft(revision)) && isRed(subtree.getRight(revision))) {
-      flipColors(subtree, revision);
+    } if (isRed(h.getLeft(revision)) && isRed(h.getRight(revision))) {
+      flipColors(h, revision);
     }
 
-    return subtree;
+    return h;
   }
 
   /***************************************************************************
    *  Red-black tree deletion.
    ***************************************************************************/
 
-  private void deleteMin(R revision) {
-    if (isEmpty(revision)) throw new NoSuchElementException("BST underflow");
-
-    // if both children of root are black, set root to red
-    Node root = findRoot(revision);
-    if (!isRed(root.getLeft(revision)) && !isRed(root.getRight(revision)))
-      root.color = Color.RED;
-
-    setRoot(revision, deleteMin(root, revision));
-    if (!isEmpty(revision)) findRoot(revision).color = Color.BLACK;
-  }
-
+  // useful because this is a left-leaning tree
   private Node deleteMin(Node h, R revision) {
     if (h.getLeft(revision) == null)
       return null;
@@ -352,45 +338,18 @@ public class PersistentSet<E extends Comparable<E>, R extends Comparable<R>> {
     return balance(h, revision);
   }
 
-  private void deleteMax(R revision) {
-    if (isEmpty(revision)) throw new NoSuchElementException("BST underflow");
-
-    // if both children of root are black, set root to red
-    Node root = findRoot(revision);
-    if (!isRed(root.getLeft(revision)) && !isRed(root.getRight(revision)))
-      root.color = Color.RED;
-
-    setRoot(revision, deleteMax(root, revision));
-    if (!isEmpty(revision)) findRoot(revision).color = Color.BLACK;
-  }
-
-  private Node deleteMax(Node h, R revision) {
-    if (isRed(h.getLeft(revision)))
-      h = rotateRight(h, revision);
-
-    if (h.getRight(revision) == null)
-      return null;
-
-    if (!isRed(h.getRight(revision)) && !isRed(h.getRight(revision).getLeft(revision)))
-      h = moveRedRight(h, revision);
-
-    h = h.setRight(revision, deleteMax(h.getRight(revision), revision));
-
-    return balance(h, revision);
-  }
-
   /**
    * Removes the specified element from the set.
    *
-   * If the element is not in the set, {@code false} is returned.
-   *
    * @param element the element to add to the set
    * @param revision the revision of the tree from which to delete
+   * @return {@code true} if the element was removed, {@code false} otherwise
    * @throws IllegalArgumentException if {@code element} is {@code null}
    */
-  public void remove(E element, R revision) {
+  public boolean remove(E element, R revision) {
     if (element == null) throw new IllegalArgumentException("argument to remove() is null");
-    if (!contains(element, revision)) return;
+
+    if (!contains(element, revision)) return false;
 
     Node root = findRoot(revision);
 
@@ -399,7 +358,10 @@ public class PersistentSet<E extends Comparable<E>, R extends Comparable<R>> {
       root.color = Color.RED;
 
     setRoot(revision, remove(root, element, revision));
+
     if (!isEmpty(revision)) findRoot(revision).color = Color.BLACK;
+
+    return true;
   }
 
   private Node remove(Node h, E element, R revision) {
@@ -570,74 +532,65 @@ public class PersistentSet<E extends Comparable<E>, R extends Comparable<R>> {
 
     // doing classic Red/Black stuff
 
-    /*
-    System.out.println("inserting a:1.0 at revision 1.0");
-    tree.put(1.0f, "a", 1.0);
+    System.out.println("inserting 1.0 at revision 1.0");
+    tree.add(1.0f, 1.0);
     System.out.println(tree.toString(1.0));
 
-    System.out.println("\ninserting y:0.8 at revision 1.0");
-    tree.put(0.8f, "y", 1.0);
+    System.out.println("\ninserting 0.8 at revision 1.0");
+    tree.add(0.8f, 1.0);
     System.out.println(tree.toString(1.0));
 
-    System.out.println("\ninserting x:1.1 at revision 1.0");
-    tree.put(1.1f, "x", 1.0);
+    System.out.println("\ninserting 1.1 at revision 1.0");
+    tree.add(1.1f, 1.0);
     System.out.println(tree.toString(1.0));
 
-    System.out.println("\ninserting z:1.2 at revision 1.0");
-    tree.put(1.2f, "z", 1.0);
+    System.out.println("\ninserting 1.2 at revision 1.0");
+    tree.add(1.2f, 1.0);
     System.out.println(tree.toString(1.0));
 
-    System.out.println("\ninserting w:0.9 at revision 1.0");
-    tree.put(0.9f, "w", 1.0);
+    System.out.println("\ninserting 0.9 at revision 1.0");
+    tree.add(0.9f, 1.0);
     System.out.println(tree.toString(1.0));
 
-    System.out.println("\ninserting r:0.7 at revision 1.0");
-    tree.put(0.7f, "r", 1.0);
+    System.out.println("\ninserting 0.7 at revision 1.0");
+    tree.add(0.7f, 1.0);
     System.out.println(tree.toString(1.0));
 
-    System.out.println("\ninserting s:1.3 at revision 1.0");
-    tree.put(1.3f, "s", 1.0);
+    System.out.println("\ninserting 1.3 at revision 1.0");
+    tree.add(1.3f, 1.0);
     System.out.println(tree.toString(1.0));
 
-    // Holding multiple revisions
+    // double insertion doesn't add two elements
 
-    System.out.println("\ninserting b:1.0 at revision 1.1");
-    tree.put(1.0f, "b", 1.1);
-    System.out.println("inserting c:1.2 at revision 1.2");
-    tree.put(1.2f, "c", 1.2);
-    System.out.println("inserting d:1.6 at revision 1.3");
-    tree.put(1.6f, "d", 1.3);
-    System.out.println("inserting e:0.6 at revision 1.4");
-    tree.put(0.6f, "e", 1.4);
+    System.out.println("\nCan I add 1.0 again? " + tree.add(1.0f, 1.0));
     System.out.println(tree);
 
-    // getting from revisions
-
-    System.out.print("getting 1.0 at revision 1.0: ");
-    System.out.println(tree.get(1.0f, 1.0));
-    System.out.print("getting 1.05 at revision 1.1: ");
-    System.out.println(tree.get(1.0f, 1.05));
-    System.out.print("getting 1.0 at revision 1.1: ");
-    System.out.println(tree.get(1.0f, 1.1));
+    // Holding multiple revisions
+    System.out.println("inserting 1.4 at revision 1.1");
+    tree.add(1.4f, 1.1);
+    System.out.println("inserting 1.6 at revision 1.2");
+    tree.add(1.6f, 1.2);
+    System.out.println("inserting 0.6 at revision 1.3");
+    tree.add(0.6f, 1.3);
+    System.out.println(tree);
 
     // getting an invalid revision. revisions are gotten as the floor entry.
     // if no floor entry exists, the tree will throw a NoSuchElementException
     // when calling get/2
 
-    System.out.println("\ngetting revision 0.9");
+    System.out.println("getting revision 0.9");
     System.out.println(tree.toString(0.9));
 
     // removing elements
 
     System.out.println("\nDeleting key 1.1 in revision 1.5");
-    tree.delete(1.1f, 1.5);
+    tree.remove(1.1f, 1.5);
     System.out.println(tree);
 
     // removing the root
 
     System.out.println("Deleting key 1.0 in revision 1.6");
-    tree.delete(1.0f, 1.6);
+    tree.remove(1.0f, 1.6);
     System.out.println(tree);
-    */
   }
 }
