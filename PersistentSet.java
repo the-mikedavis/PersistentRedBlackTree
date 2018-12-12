@@ -1,6 +1,6 @@
 import java.util.NoSuchElementException;
-import java.util.TreeMap;
-import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * A Persistent Implementation of a Left Leaning RedBlack Tree as a Set.
@@ -54,24 +54,27 @@ public class PersistentSet<E extends Comparable<E>, R extends Comparable<R>> {
   private class Node {
     private static final int MAX_RECORD_CHANGES = 5;
 
+    // bookkeeping for root nodes
+    private R revision;
+
     public E element;
     public Color color;
-    private TreeMap<R, SetRecord> setRecords;
+    private List<SetRecord> setRecords;
 
     public Node (E element) {
       this.element = element;
-      this.setRecords = new TreeMap<R, SetRecord>();
+      this.setRecords = new ArrayList<SetRecord>(MAX_RECORD_CHANGES);
     }
 
     public Node (R revision, E element, Color color, int size) {
       this(element);
       this.color = color;
-      setRecords.put(revision, new SetRecord(revision, null, null, size));
+      this.setRecords.add(new SetRecord(revision, null, null, size));
     }
 
     public Node (E element, SetRecord record) {
       this(element);
-      setRecords.put(record.revision, record);
+      this.setRecords.add(record);
     }
 
     public String toString (R revision) { return toString(revision, this); }
@@ -117,18 +120,34 @@ public class PersistentSet<E extends Comparable<E>, R extends Comparable<R>> {
     }
 
     public SetRecord findRevision (R revision) {
-      if (setRecords.isEmpty()) return null;
+      int index = recordIndex(revision);
 
-      Map.Entry<R, SetRecord> floor =
-        setRecords.floorEntry(revision);
+      return setRecords.get(index < 0 ? -index - 1 : index);
+    }
 
-      return floor == null ? null : floor.getValue();
+    private int recordIndex (R revision) {
+      int begin = 0;
+      int end = setRecords.size() - 1;
+      int mid = 0;
+
+      while (begin <= end) {
+        mid = (begin + end) >> 1;
+        int cmp = revision.compareTo(setRecords.get(mid).revision);
+        if (cmp == 0)
+          return mid;
+        else if (cmp > 0)
+          begin = mid + 1;
+        else
+          end = mid - 1;
+      }
+
+      return -mid - 1;
     }
 
     public Node setLeft(R revision, Node left) {
       Node node = whichNode(revision);
 
-      SetRecord current = node.setRecords.lastEntry().getValue();
+      SetRecord current = node.setRecords.get(node.setRecords.size() - 1);
 
       SetRecord change =
         new SetRecord(
@@ -138,7 +157,7 @@ public class PersistentSet<E extends Comparable<E>, R extends Comparable<R>> {
           size(left, current.right, revision)
         );
 
-      node.setRecords.put(revision, change);
+      node.setRecord(revision, change);
 
       return node;
     }
@@ -146,7 +165,7 @@ public class PersistentSet<E extends Comparable<E>, R extends Comparable<R>> {
     public Node setRight(R revision, Node right) {
       Node node = whichNode(revision);
 
-      SetRecord current = node.setRecords.lastEntry().getValue();
+      SetRecord current = node.setRecords.get(node.setRecords.size() - 1);
 
       SetRecord change =
         new SetRecord(
@@ -156,7 +175,7 @@ public class PersistentSet<E extends Comparable<E>, R extends Comparable<R>> {
           size(current.left, right, revision)
         );
 
-      node.setRecords.put(revision, change);
+      node.setRecord(revision, change);
 
       return node;
     }
@@ -165,7 +184,7 @@ public class PersistentSet<E extends Comparable<E>, R extends Comparable<R>> {
       // if we've maxed out this node, allocate a new one
       if (setRecords.size() >= MAX_RECORD_CHANGES) {
         Node replacement =
-          new Node(this.element, setRecords.lastEntry().getValue());
+          new Node(this.element, setRecords.get(setRecords.size() - 1));
 
         replacement.color = this.color;
 
@@ -180,14 +199,24 @@ public class PersistentSet<E extends Comparable<E>, R extends Comparable<R>> {
       // +1 because of the parent of left & right
       return leftSize + rightSize + 1;
     }
+
+    private void setRecord (R revision, SetRecord record) {
+      // will replace the existing entry at `revision`
+      int index = recordIndex(revision);
+
+      if (index < 0 || ! setRecords.get(index).revision.equals(revision))
+        setRecords.add(record);
+      else
+        setRecords.set(index, record);
+    }
   }
 
-  private TreeMap<R, Node> rootRecords;
+  private ArrayList<Node> rootRecords;
 
   /**
    * Initializes an empty symbol table.
    */
-  public PersistentSet() { rootRecords = new TreeMap<R, Node>(); }
+  public PersistentSet() { rootRecords = new ArrayList<Node>(); }
 
   /***************************************************************************
    *  Node helper methods.
@@ -236,9 +265,11 @@ public class PersistentSet<E extends Comparable<E>, R extends Comparable<R>> {
    * @throws IllegalArgumentException if {@code key} is {@code null}
    */
   public E predecessor(E element, R revision) {
-    if (element == null) throw new IllegalArgumentException("argument to get() is null");
+    if (element == null)
+      throw new IllegalArgumentException("argument to get() is null");
 
     Node root = findRoot(revision);
+
     return predecessor(root, null, element, revision);
   }
 
@@ -261,16 +292,18 @@ public class PersistentSet<E extends Comparable<E>, R extends Comparable<R>> {
    * @throws IllegalArgumentException if {@code key} is {@code null}
    */
   public E successor(E element, R revision) {
-    if (element == null) throw new IllegalArgumentException("argument to get() is null");
+    if (element == null)
+      throw new IllegalArgumentException("argument to get() is null");
 
     Node root = findRoot(revision);
+
     return successor(root, null, element, revision);
   }
 
   private E successor(Node x, E accumulator, E element, R revision) {
     if (x == null) return accumulator;
-    int cmp = element.compareTo(x.element);
-    if (cmp < 0)
+
+    if (element.compareTo(x.element) < 0)
       return successor(x.getLeft(revision), x.element, element, revision);
     else
       return successor(x.getRight(revision), accumulator, element, revision);
@@ -533,23 +566,48 @@ public class PersistentSet<E extends Comparable<E>, R extends Comparable<R>> {
   private Node findRoot(R revision) {
     if (rootRecords.isEmpty()) return null;
 
-    Map.Entry<R, Node> entry = rootRecords.floorEntry(revision);
+    int index = rootIndexOf(revision);
 
-    if (entry == null) return null;
-
-    return entry.getValue();
+    return rootRecords.get(index < 0 ? -index - 1 : index);
   }
 
   private void setRoot (R revision, Node node) {
     // will replace the existing entry at `revision`
-    rootRecords.put(revision, node);
+    int rootIndex = rootIndexOf(revision);
+
+    node.revision = revision;
+
+    if (rootIndex < 0 || ! rootRecords.get(rootIndex).revision.equals(revision))
+      rootRecords.add(node);
+    else
+      rootRecords.set(rootIndex, node);
+  }
+
+  private int rootIndexOf(R revision) {
+    int begin = 0;
+    int end = rootRecords.size() - 1;
+    int mid = 0;
+
+    while (begin <= end) {
+      mid = (begin + end) >> 1;
+      int cmp = revision.compareTo(rootRecords.get(mid).revision);
+      if (cmp == 0)
+        return mid;
+      else if (cmp > 0)
+        begin = mid + 1;
+      else
+        end = mid - 1;
+    }
+
+    return -mid - 1;
   }
 
   public String toString () {
     String str = "";
 
-    for (R revision : rootRecords.keySet())
-      str += "revision " + revision + ": " + toString(revision) + "\n";
+    for (Node root : rootRecords)
+      str += "revision " + root.revision + ": " +
+        toString(root.revision) + "\n";
 
     return str;
   }
