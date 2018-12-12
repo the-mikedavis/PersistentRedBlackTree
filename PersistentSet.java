@@ -6,15 +6,14 @@ import java.util.List;
  * A Persistent Implementation of a Left Leaning RedBlack Tree as a Set.
  *
  * Takes a revision based approach to persistence, where the revision may be
- * any comparable.
- *
- * Originally authored by
+ * any comparable. Parameterized by {@code E}, the element type to store, and
+ * {@code R}, the revision. Both must extend {@code java.lang.Comparable}.
+ * This set assumes that the tree is built with non-decreasing revisions.
+ * Altering past revisions will not cause cascading changes to future
+ * revisions.
  *
  * @author Robert Sedgewick
  * @author Kevin Wayne
- *
- * Made persistent by
- *
  * @author Michael Davis
  */
 
@@ -214,7 +213,7 @@ public class PersistentSet<E extends Comparable<E>, R extends Comparable<R>> {
   private ArrayList<Node> rootRecords;
 
   /**
-   * Initializes an empty symbol table.
+   * Initializes an empty set.
    */
   public PersistentSet() { rootRecords = new ArrayList<Node>(); }
 
@@ -321,7 +320,7 @@ public class PersistentSet<E extends Comparable<E>, R extends Comparable<R>> {
 
   /**
    * Does this symbol table contain the given key?
-   * @param key the key
+   * @param element the element to search for
    * @param revision the revision of the tree for which to search the key
    * @return {@code true} if this symbol table contains {@code key} and
    *     {@code false} otherwise
@@ -602,6 +601,11 @@ public class PersistentSet<E extends Comparable<E>, R extends Comparable<R>> {
     return -mid - 1;
   }
 
+  /**
+   * Stringifies the set for all revisions.
+   *
+   * @return a string version of the tree with newlines for each revision
+   */
   public String toString () {
     String str = "";
 
@@ -612,89 +616,17 @@ public class PersistentSet<E extends Comparable<E>, R extends Comparable<R>> {
     return str;
   }
 
+  /**
+   * Stringifies the set for the specified revision.
+   *
+   * @param revision the revision to stringify
+   * @return a string version of the tree in the recursive form of
+   * (root left-tree right-tree).
+   */
   public String toString (R revision) {
     Node root = findRoot(revision);
 
     return root == null ?
       "No tree exists at revision " + revision : root.toString(revision);
-  }
-
-  public static void main(String[] args) {
-    PersistentSet<Float, Double> tree = new PersistentSet<Float, Double>();
-
-    // doing classic Red/Black stuff
-
-    System.out.println("inserting 1.0 at revision 1.0");
-    tree.add(1.0f, 1.0);
-    System.out.println(tree.toString(1.0));
-
-    System.out.println("\ninserting 0.8 at revision 1.0");
-    tree.add(0.8f, 1.0);
-    System.out.println(tree.toString(1.0));
-
-    System.out.println("\ninserting 1.1 at revision 1.0");
-    tree.add(1.1f, 1.0);
-    System.out.println(tree.toString(1.0));
-
-    System.out.println("\ninserting 1.2 at revision 1.0");
-    tree.add(1.2f, 1.0);
-    System.out.println(tree.toString(1.0));
-
-    System.out.println("\ninserting 0.9 at revision 1.0");
-    tree.add(0.9f, 1.0);
-    System.out.println(tree.toString(1.0));
-
-    System.out.println("\ninserting 0.7 at revision 1.0");
-    tree.add(0.7f, 1.0);
-    System.out.println(tree.toString(1.0));
-
-    System.out.println("\ninserting 1.3 at revision 1.0");
-    tree.add(1.3f, 1.0);
-    System.out.println(tree.toString(1.0));
-
-    // double insertion doesn't add two elements
-
-    System.out.println("\nCan I add 1.0 again? " + tree.add(1.0f, 1.0));
-    System.out.println(tree);
-
-    // Holding multiple revisions
-    System.out.println("inserting 1.4 at revision 1.1");
-    tree.add(1.4f, 1.1);
-    System.out.println("inserting 1.6 at revision 1.2");
-    tree.add(1.6f, 1.2);
-    System.out.println("inserting 0.6 at revision 1.3");
-    tree.add(0.6f, 1.3);
-    System.out.println(tree);
-
-    // getting an invalid revision. revisions are gotten as the floor entry.
-    // if no floor entry exists, the tree will throw a NoSuchElementException
-    // when calling get/2
-
-    System.out.println("getting revision 0.9");
-    System.out.println(tree.toString(0.9));
-
-    // removing elements
-
-    System.out.println("\nDeleting key 1.1 in revision 1.5");
-    tree.remove(1.1f, 1.5);
-    System.out.println(tree);
-
-    // removing the root
-
-    System.out.println("Deleting key 1.0 in revision 1.6");
-    tree.remove(1.0f, 1.6);
-    System.out.println(tree);
-
-    // getting elements by proximity
-
-    System.out.println("Predecessor of 1.05 in revision 1.0: " +
-        tree.predecessor(1.05f, 1.0));
-    System.out.println("Predecessor of 0.85 in revision 1.0: " +
-        tree.predecessor(0.85f, 1.0));
-
-    System.out.println("Successor of 1.05 in revision 1.0: " +
-        tree.successor(1.05f, 1.0));
-    System.out.println("Successor of 0.85 in revision 1.0: " +
-        tree.successor(0.85f, 1.0));
   }
 }
