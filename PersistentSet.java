@@ -211,6 +211,7 @@ public class PersistentSet<E extends Comparable<E>, R extends Comparable<R>> {
   }
 
   private ArrayList<Node> rootRecords;
+  private int size;
 
   /**
    * Initializes an empty set.
@@ -230,15 +231,20 @@ public class PersistentSet<E extends Comparable<E>, R extends Comparable<R>> {
     return x == null ? 0 : x.getSize(revision);
   }
 
-
   /**
-   * Returns the number of elements in the set
+   * Returns the number of elements in the set at a specified revision
    * @param revision the revision of the tree from which to calculate size
    * @return the number of elements in the set
    */
   public int size(R revision) {
     return size(findRoot(revision), revision);
   }
+
+  /**
+   * Returns the number of elements in the set across all revisions
+   * @return the number of elements in the set
+   */
+  public int size() { return this.size; }
 
   /**
    * Is this set empty?
@@ -360,6 +366,8 @@ public class PersistentSet<E extends Comparable<E>, R extends Comparable<R>> {
       root.color = Color.BLACK;
     }
 
+    this.size++;
+
     return true;
   }
 
@@ -426,6 +434,8 @@ public class PersistentSet<E extends Comparable<E>, R extends Comparable<R>> {
     setRoot(revision, remove(root, element, revision));
 
     if (!isEmpty(revision)) findRoot(revision).color = Color.BLACK;
+
+    this.size--;
 
     return true;
   }
