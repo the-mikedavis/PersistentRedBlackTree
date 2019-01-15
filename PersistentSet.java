@@ -211,7 +211,7 @@ public class PersistentSet<E extends Comparable<E>, R extends Comparable<R>> {
   }
 
   private ArrayList<Node> rootRecords;
-  private int size;
+  private int size = 0;
 
   /**
    * Initializes an empty set.
